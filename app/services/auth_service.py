@@ -4,8 +4,12 @@
 此服务层仅用于后端需要的 token 验证等操作
 """
 
+import logging
 from typing import Optional
 from supabase import Client
+
+# 配置日志
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -31,19 +35,26 @@ class AuthService:
             用户信息字典，如果 token 无效则返回 None
         """
         try:
+            logger.debug(f"🔍 [AuthService] Verifying token (length: {len(token)})")
             response = self.supabase.auth.get_user(token)
             
             if response and response.user:
+                logger.info(f"✅ [AuthService] Token verified successfully for user: {response.user.email}")
                 return {
                     "id": response.user.id,
                     "email": response.user.email,
                     "user_metadata": response.user.user_metadata or {},
                     "created_at": str(response.user.created_at) if response.user.created_at else None,
                 }
+            else:
+                logger.warning("⚠️  [AuthService] Token verification failed: invalid response")
             
             return None
         except Exception as e:
-            print(f"Token verification error: {e}")
+            logger.error(
+                f"❌ [AuthService] Token verification error: {type(e).__name__}: {str(e)}",
+                exc_info=True
+            )
             return None
     
     async def get_user_by_id(self, user_id: str) -> Optional[dict]:
@@ -57,19 +68,26 @@ class AuthService:
             用户信息字典
         """
         try:
+            logger.debug(f"🔍 [AuthService] Getting user by ID: {user_id}")
             # 这需要使用 service_role_key 的客户端
             response = self.supabase.auth.admin.get_user_by_id(user_id)
             
             if response and response.user:
+                logger.info(f"✅ [AuthService] User found: {response.user.email}")
                 return {
                     "id": response.user.id,
                     "email": response.user.email,
                     "user_metadata": response.user.user_metadata or {},
                     "created_at": str(response.user.created_at) if response.user.created_at else None,
                 }
+            else:
+                logger.warning(f"⚠️  [AuthService] User not found: {user_id}")
             
             return None
         except Exception as e:
-            print(f"Get user error: {e}")
+            logger.error(
+                f"❌ [AuthService] Get user error for ID {user_id}: {type(e).__name__}: {str(e)}",
+                exc_info=True
+            )
             return None
 

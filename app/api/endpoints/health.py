@@ -21,7 +21,7 @@ async def health_check():
         }
     )
 
-@router.get("/health/check")
+@router.get("/check")
 async def health_check_db():
     """Health check database"""
     return success(data={"message": "Database is healthy"})
