@@ -5,43 +5,25 @@ from typing import AsyncGenerator
 
 from app.core.config import settings
 from app.core.response import success
+from app.core.dependencies import CurrentUser
 from app.schemas.face_flip import ImageGenerationRequest, SSEEvent
 from app.services.image_generation_service import image_generation_service
-from app.middleware.auth import get_current_user_from_request
 
 
 router = APIRouter()
 
 
 @router.get("/debug/auth")
-async def debug_auth(http_request: Request):
+async def debug_auth(current_user: CurrentUser):
     """
     调试认证状态接口
     """
-    try:
-        # 检查认证中间件是否设置了用户信息
-        current_user = get_current_user_from_request(http_request)
-        
-        if current_user:
-            return {
-                "authenticated": True,
-                "user": current_user,
-                "message": "认证成功"
-            }
-        else:
-            # 检查Authorization header
-            auth_header = http_request.headers.get("Authorization")
-            return {
-                "authenticated": False,
-                "auth_header": auth_header,
-                "message": "未认证或认证失败"
-            }
-    except Exception as e:
-        return {
-            "authenticated": False,
-            "error": str(e),
-            "message": "认证检查出错"
-        }
+    return {
+        "authenticated": True,
+        "user": current_user,
+        "method": "dependency_injection",
+        "message": "通过依赖注入认证成功"
+    }
 
 
 @router.get("/debug/env")
@@ -64,25 +46,18 @@ async def debug_env():
 @router.post("/generate/stream")
 async def generate_images_stream(
     request: ImageGenerationRequest,
-    http_request: Request
+    current_user: CurrentUser
 ) -> StreamingResponse:
     """
     流式生成图像接口（需要JWT认证）
     
     Args:
         request: 图像生成请求，包含urls和task_id
-        http_request: HTTP请求对象，用于获取用户信息
+        current_user: 当前登录用户（通过依赖注入获取）
         
     Returns:
         StreamingResponse: SSE流式响应
     """
-    # 获取当前用户（由认证中间件验证）
-    current_user = get_current_user_from_request(http_request)
-    if not current_user:
-        raise HTTPException(
-            status_code=401,
-            detail="用户未认证或认证已过期"
-        )
     
     # 验证用户权限（可选：添加更多权限检查）
     user_id = current_user.get("id")
