@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_key: str = ""
     supabase_service_role_key: Optional[str] = None
+    supabase_storage_bucket: str = "faceflip-images"
     
     # JWT
     secret_key: str = "your-secret-key-change-this-in-production"
@@ -42,6 +43,15 @@ class Settings(BaseSettings):
     
     # Logging
     log_level: str = "INFO"
+    
+    # ARK API
+    ark_api_key: Optional[str] = None
+    
+    # ARK Image Generation
+    ark_default_prompt: str = "生成3张女孩和奶牛玩偶在游乐园开心地坐过山车的图片，涵盖早晨、中午、晚上"
+    ark_model: str = "doubao-seedream-4-0-250828"
+    ark_image_size: str = "2K"
+    ark_max_images: int = 3
     
     model_config = SettingsConfigDict(
         env_file=".env",

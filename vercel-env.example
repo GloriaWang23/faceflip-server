@@ -1,0 +1,42 @@
+# Vercel 环境变量配置
+# 在 Vercel Dashboard 的 Settings > Environment Variables 中设置以下变量
+
+# Supabase 配置
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+# ARK API 配置
+ARK_API_KEY=your_ark_api_key
+
+# JWT 配置
+SECRET_KEY=your_jwt_secret_key_change_this_in_production
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# 应用配置
+APP_NAME=Face Flip Server
+APP_VERSION=0.1.0
+DEBUG=false
+
+# CORS 配置
+CORS_ORIGINS=["*"]
+CORS_CREDENTIALS=true
+CORS_METHODS=["*"]
+CORS_HEADERS=["*"]
+
+# 文件上传配置
+MAX_UPLOAD_SIZE=10485760
+UPLOAD_FOLDER=uploads
+
+# 日志配置
+LOG_LEVEL=INFO
+
+# ARK 图像生成配置
+ARK_DEFAULT_PROMPT=生成3张女孩和奶牛玩偶在游乐园开心地坐过山车的图片，涵盖早晨、中午、晚上
+ARK_MODEL=doubao-seedream-4-0-250828
+ARK_IMAGE_SIZE=2K
+ARK_MAX_IMAGES=3
+
+# Supabase 存储配置
+SUPABASE_STORAGE_BUCKET=faceflip-images

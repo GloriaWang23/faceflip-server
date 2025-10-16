@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.endpoints import auth, users, health, order
+from app.api.endpoints import auth, users, health, order, faceflip
 
 # Create main API router
 api_router = APIRouter()
@@ -31,5 +31,11 @@ api_router.include_router(
     order.router,
     prefix="/orders",
     tags=["orders"]
+)
+
+api_router.include_router(
+    faceflip.router,
+    prefix="/faceflip",
+    tags=["faceflip"]
 )
 

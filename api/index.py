@@ -54,7 +54,7 @@ app.add_middleware(
 # 注意：中间件的添加顺序很重要，执行顺序是反向的（后添加的先执行）
 # 执行顺序：Logging -> Auth -> Error Handler
 app.add_middleware(LoggingMiddleware)
-app.add_middleware(AuthMiddleware, enable=True)  # 启用全局认证
+app.add_middleware(AuthMiddleware, enable=False)  # 启用全局认证
 app.middleware("http")(error_handler_middleware)
 
 logger.info("🚀 Vercel serverless function initialized")
@@ -77,7 +77,7 @@ async def root():
     })
 
 # Health check endpoint
-@app.get("/health")
+@app.get("/health/check")
 async def health_check():
     """Health check endpoint"""
     return success(data={

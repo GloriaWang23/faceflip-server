@@ -4,16 +4,32 @@
     {
       "src": "api/index.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "ui/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
     }
   ],
   "routes": [
     {
-      "src": "/(.*)",
+      "src": "/api/(.*)",
       "dest": "api/index.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "ui/$1"
     }
   ],
   "env": {
     "PYTHON_VERSION": "3.12"
+  },
+  "functions": {
+    "api/index.py": {
+      "runtime": "python3.12"
+    }
   }
 }
 

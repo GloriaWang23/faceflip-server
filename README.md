@@ -57,10 +57,13 @@ face-flip-server/
 
 ### 环境要求
 
-- Python 3.13+
+- Python 3.12+
 - UV 包管理器 (推荐) 或 pip
+- Node.js 16+ (用于前端开发)
 
-### 安装依赖
+### 本地开发
+
+#### 1. 安装依赖
 
 使用 UV (推荐):
 
@@ -68,25 +71,19 @@ face-flip-server/
 # 安装 UV
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 安装项目依赖
+# 安装后端依赖
 uv sync
 
-# 安装开发依赖
-uv sync --extra dev
+# 安装前端依赖
+cd ui && npm install && cd ..
 ```
 
-或使用 pip:
+#### 2. 配置环境变量
+
+复制环境变量示例文件:
 
 ```bash
-pip install -e .
-```
-
-### 配置环境变量
-
-复制 `.env.example` 为 `.env` 并填写配置:
-
-```bash
-cp .env.example .env
+cp vercel-env.example .env
 ```
 
 编辑 `.env` 文件，填写必要的配置：
@@ -95,14 +92,15 @@ cp .env.example .env
 # Supabase 配置
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your-anon-key-here
+ARK_API_KEY=your-ark-api-key
 
 # JWT 密钥
 SECRET_KEY=your-secret-key-change-this-in-production
 ```
 
-### 运行服务器
+#### 3. 运行服务器
 
-开发模式:
+后端开发模式:
 
 ```bash
 # 使用 UV
@@ -111,6 +109,51 @@ uv run python run.py
 # 或直接使用 uvicorn
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+前端开发模式:
+
+```bash
+cd ui && npm run dev
+```
+
+### 🚀 Vercel 部署
+
+#### 一键部署
+
+```bash
+# 使用部署脚本
+./deploy.sh
+
+# 或使用 Makefile
+make vercel-deploy
+```
+
+#### 手动部署
+
+```bash
+# 1. 安装 Vercel CLI
+npm install -g vercel
+
+# 2. 登录 Vercel
+vercel login
+
+# 3. 构建项目
+make vercel-build
+
+# 4. 部署
+vercel --prod
+```
+
+#### 环境变量配置
+
+在 Vercel Dashboard 的 Settings > Environment Variables 中设置：
+
+- `SUPABASE_URL` - Supabase 项目 URL
+- `SUPABASE_KEY` - Supabase 匿名密钥
+- `ARK_API_KEY` - ARK API 密钥
+- `SECRET_KEY` - JWT 密钥
+
+详细配置请参考：[Vercel 部署文档](docs/VERCEL_DEPLOYMENT.md)
 
 ## 📚 API 文档
 

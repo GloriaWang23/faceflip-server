@@ -68,3 +68,27 @@ dmypy.json
 # UV lock file (keep it for dependency tracking)
 # uv.lock
 
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Frontend build outputs
+ui/dist/
+ui/build/
+
+# Package manager lock files (keep package.json but ignore lock files)
+ui/package-lock.json
+ui/yarn.lock
+ui/pnpm-lock.yaml
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
