@@ -128,13 +128,16 @@ class ImageGenerationService:
                 data={"task_id": task_id, "message": "正在调用ARK模型生成图像..."}
             )
             
-            # 在线程池中执行同步的ARK API调用
+            # 在线程池中执行同步的ARK API调用，带超时
             loop = asyncio.get_event_loop()
-            images_response = await loop.run_in_executor(
-                None,
-                self._call_ark_api,
-                urls,
-                prompt
+            images_response = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    self._call_ark_api,
+                    urls,
+                    prompt
+                ),
+                timeout=settings.ark_api_timeout_seconds
             )
             
             # 发送上传开始事件

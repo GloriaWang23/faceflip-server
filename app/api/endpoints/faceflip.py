@@ -1,4 +1,5 @@
 import json
+import asyncio
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from typing import AsyncGenerator
@@ -67,7 +68,7 @@ async def generate_images_stream(
     print(f"用户 {user_email} (ID: {user_id}) 开始生成图像，任务ID: {request.task_id}")
     
     async def event_generator() -> AsyncGenerator[str, None]:
-        """生成SSE事件流"""
+        """生成SSE事件流（Vercel兼容版本）"""
         try:
             # 发送开始事件，包含用户信息
             start_event = SSEEvent(
@@ -76,7 +77,8 @@ async def generate_images_stream(
                     "task_id": request.task_id,
                     "user_id": user_id,
                     "user_email": user_email,
-                    "message": "开始生成图像..."
+                    "message": "开始生成图像...",
+                    "timeout": min(settings.sse_timeout_seconds, 60)  # Vercel限制为60秒
                 }
             )
             event_data = f"event: {start_event.event}\n"
@@ -85,7 +87,7 @@ async def generate_images_stream(
             print(f"发送开始SSE事件: {start_event.event}, 数据: {json_data}")
             yield event_data
             
-            # 调用图像生成服务
+            # 直接调用图像生成服务，不使用复杂的任务管理
             async for event in image_generation_service.generate_images_stream(
                 urls=request.urls,
                 task_id=request.task_id,

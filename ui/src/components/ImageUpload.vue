@@ -150,7 +150,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { uploadImage as uploadToSupabase } from '../supabase.js'
 import { useAuth } from '../composables/useAuth.js'
 import { v4 as uuidv4 } from 'uuid'
@@ -170,6 +170,8 @@ const generating = ref(false)
 const generationStatus = ref(null)
 const generatedImages = ref([])
 const imageLoading = ref({}) // 跟踪每张图像的加载状态
+const currentEventSource = ref(null) // 跟踪当前的 EventSource 实例
+const sseTimeout = ref(60000) // SSE超时时间（60秒，毫秒，Vercel限制）
 
 // 触发文件选择
 const triggerFileInput = () => {
@@ -278,6 +280,14 @@ const clearFile = () => {
   generationStatus.value = null
   generatedImages.value = []
   imageLoading.value = {}
+  
+  // 关闭 EventSource 连接
+  if (currentEventSource.value) {
+    currentEventSource.value.close()
+    currentEventSource.value = null
+  }
+  
+  
   if (fileInput.value) {
     fileInput.value.value = ''
   }
@@ -322,116 +332,147 @@ const generateImages = async () => {
     
     console.log('使用JWT令牌请求SSE接口:', accessToken.substring(0, 20) + '...')
     
-    const response = await fetch('/api/faceflip/generate/stream', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(requestData)
-    })
+    // 构建带认证参数的URL
+    const url = new URL('/api/faceflip/generate/stream', window.location.origin)
+    url.searchParams.set('token', accessToken)
+    url.searchParams.set('task_id', taskId)
+    url.searchParams.set('urls', JSON.stringify([uploadResult.value.publicUrl]))
     
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new Error('认证失败，请重新登录')
-      } else if (response.status === 403) {
-        throw new Error('权限不足，无法访问此功能')
-      } else {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
+    // 关闭之前的连接（如果存在）
+    if (currentEventSource.value) {
+      currentEventSource.value.close()
+      currentEventSource.value = null
     }
     
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = '' // 用于缓存不完整的数据
+    // 使用 EventSource API 来处理 SSE（Vercel兼容版本）
+    const eventSource = new EventSource(url.toString())
+    currentEventSource.value = eventSource
     
-    const readStream = () => {
-      return reader.read().then(({ done, value }) => {
-        if (done) {
-          generating.value = false
-          return
-        }
-        
-        // 将新数据添加到缓冲区
-        buffer += decoder.decode(value, { stream: true })
-        
-        // 按双换行符分割SSE事件
-        const events = buffer.split('\n\n')
-        
-        // 保留最后一个可能不完整的事件
-        buffer = events.pop() || ''
-        
-        // 处理完整的事件
-        events.forEach(eventText => {
-          if (eventText.trim()) {
-            parseSSEEvent(eventText.trim())
+    // 设置简单的超时检查
+    const timeoutId = setTimeout(() => {
+      if (currentEventSource.value) {
+        console.warn('SSE连接超时，关闭连接')
+        handleGenerationEvent({
+          event: 'error',
+          data: {
+            message: '连接超时',
+            error: `连接已超过 ${sseTimeout.value / 1000} 秒，自动断开`
           }
         })
-        
-        return readStream()
+        currentEventSource.value.close()
+        currentEventSource.value = null
+        generating.value = false
+      }
+    }, sseTimeout.value)
+    
+    // 添加事件监听器
+    eventSource.addEventListener('start', (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        handleGenerationEvent({
+          event: 'start',
+          data: data
+        })
+      } catch (e) {
+        console.error('解析start事件数据失败:', e)
+        handleGenerationEvent({
+          event: 'start',
+          data: { message: '开始生成图像...' }
+        })
+      }
+    })
+    
+    eventSource.addEventListener('process', (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        handleGenerationEvent({
+          event: 'process',
+          data: data
+        })
+      } catch (e) {
+        console.error('解析process事件数据失败:', e)
+        handleGenerationEvent({
+          event: 'process',
+          data: { message: '正在处理中...' }
+        })
+      }
+    })
+    
+    eventSource.addEventListener('done', (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        handleGenerationEvent({
+          event: 'done',
+          data: data
+        })
+      } catch (e) {
+        console.error('解析done事件数据失败:', e)
+        handleGenerationEvent({
+          event: 'error',
+          data: { 
+            message: '数据解析失败',
+            error: e.message
+          }
+        })
+      }
+    })
+    
+    eventSource.addEventListener('error', (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        handleGenerationEvent({
+          event: 'error',
+          data: data
+        })
+      } catch (e) {
+        console.error('解析error事件数据失败:', e)
+        handleGenerationEvent({
+          event: 'error',
+          data: { 
+            message: '生成过程中发生错误',
+            error: e.message
+          }
+        })
+      }
+    })
+    
+    
+    // 监听连接错误
+    eventSource.onerror = (error) => {
+      console.error('SSE连接错误:', error)
+      handleGenerationEvent({
+        event: 'error',
+        data: {
+          message: '连接中断',
+          error: 'SSE连接失败'
+        }
       })
+      eventSource.close()
+      currentEventSource.value = null
+      generating.value = false
+      // 清理定时器
+      clearTimeout(timeoutId)
     }
     
-    // 解析单个SSE事件
-    const parseSSEEvent = (eventText) => {
-      const lines = eventText.split('\n')
-      let eventType = ''
-      let eventData = ''
-      
-      lines.forEach(line => {
-        if (line.startsWith('event:')) {
-          eventType = line.substring(6).trim() // 使用substring避免split问题
-        } else if (line.startsWith('data:')) {
-          // 处理data行，可能包含冒号
-          const dataContent = line.substring(5).trim() // 移除'data:'前缀
-          if (eventData) {
-            eventData += '\n' + dataContent // 如果有多行data，合并
-          } else {
-            eventData = dataContent
-          }
-        }
-      })
-      
-      if (eventType && eventData) {
-        try {
-          const parsedData = JSON.parse(eventData)
-          
-          // 构建正确的事件数据结构
-          const eventPayload = {
-            event: eventType,
-            data: parsedData
-          }
-          
-          handleGenerationEvent(eventPayload)
-        } catch (e) {
-          console.error('解析SSE数据失败:', eventData, e)
-          // 尝试修复常见的JSON格式问题
-          try {
-            // 如果JSON解析失败，尝试修复格式
-            let fixedData = eventData
-            // 检查是否有未闭合的引号或括号
-            if (!fixedData.includes('"task_id"')) {
-              console.log('尝试修复JSON格式...')
-              // 这里可以添加更多的修复逻辑
-            }
-            const parsedData = JSON.parse(fixedData)
-            handleGenerationEvent(parsedData)
-          } catch (e2) {
-            console.error('修复JSON后仍然解析失败:', e2)
-            // 发送一个通用的错误事件
-            handleGenerationEvent({
-              event: 'error',
-              data: {
-                message: '数据解析失败',
-                error: e.message
-              }
-            })
-          }
-        }
+    // 监听连接打开
+    eventSource.onopen = () => {
+      console.log('SSE连接已建立')
+    }
+    
+    // 等待生成完成或错误后关闭连接
+    const checkGenerationComplete = () => {
+      if (!generating.value && currentEventSource.value) {
+        currentEventSource.value.close()
+        currentEventSource.value = null
+        // 清理定时器
+        clearTimeout(timeoutId)
+      } else if (generating.value) {
+        setTimeout(checkGenerationComplete, 1000)
       }
     }
     
-    await readStream()
+    // 开始检查生成状态
+    setTimeout(checkGenerationComplete, 1000)
     
   } catch (error) {
     console.error('图像生成失败:', error)
@@ -445,8 +486,10 @@ const generateImages = async () => {
 }
 
 // 处理生成事件
-const handleGenerationEvent = (data) => {
-  switch (data.event) {
+const handleGenerationEvent = (eventData) => {
+  const { event, data } = eventData
+  
+  switch (event) {
     case 'start':
       generationStatus.value = {
         type: 'start',
@@ -471,11 +514,11 @@ const handleGenerationEvent = (data) => {
       generationStatus.value = {
         type: 'success',
         title: '✅ 生成完成',
-        message: `成功生成了 ${data.data.generated_images.length} 张图像`
+        message: `成功生成了 ${data.generated_images?.length || 0} 张图像`
       }
       
       // 确保图像数据正确设置
-      generatedImages.value = data.data.generated_images || []
+      generatedImages.value = data.generated_images || []
       
       // 初始化图像加载状态
       generatedImages.value.forEach((_, index) => {
@@ -488,11 +531,11 @@ const handleGenerationEvent = (data) => {
     case 'error':
       // 处理不同类型的错误
       let errorTitle = '❌ 生成失败'
-      let errorMessage = data.data.message || '图像生成失败'
+      let errorMessage = data.message || '图像生成失败'
       let errorDetails = ''
       
-      if (data.data.error) {
-        const error = data.data.error
+      if (data.error) {
+        const error = data.error
         
         // 处理特定错误类型
         if (error.includes('ARK_API_KEY')) {
@@ -507,7 +550,7 @@ const handleGenerationEvent = (data) => {
           errorTitle = '🚫 权限不足'
           errorMessage = '权限不足，无法访问此功能'
           errorDetails = '您没有权限使用图像生成功能'
-        } else if (error.includes('网络') || error.includes('timeout')) {
+        } else if (error.includes('网络') || error.includes('timeout') || error.includes('超时')) {
           errorTitle = '🌐 网络错误'
           errorMessage = '网络连接超时，请检查网络后重试'
           errorDetails = '无法连接到图像生成服务，请稍后重试'
@@ -557,6 +600,14 @@ const downloadImage = async (url, index) => {
     alert('下载失败，请尝试右键保存图像')
   }
 }
+
+// 组件卸载时清理 EventSource 连接
+onUnmounted(() => {
+  if (currentEventSource.value) {
+    currentEventSource.value.close()
+    currentEventSource.value = null
+  }
+})
 </script>
 
 <style scoped>

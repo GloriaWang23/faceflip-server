@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     ark_image_size: str = "2K"
     ark_max_images: int = 3
     
+    # SSE 超时设置（Vercel兼容）
+    sse_timeout_seconds: int = 60  # SSE连接超时时间（60秒，Vercel限制）
+    sse_keep_alive_interval: int = 15  # SSE心跳间隔（15秒）
+    ark_api_timeout_seconds: int = 45  # ARK API调用超时时间（45秒）
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
