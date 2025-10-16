@@ -39,6 +39,7 @@ PUBLIC_PATHS: Set[str] = {
     
     # 调试接口（临时）
     "/api/faceflip/debug/auth",
+    "/api/faceflip/debug/env",
 }
 
 # 白名单路径模式（正则表达式）

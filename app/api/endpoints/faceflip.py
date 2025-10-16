@@ -44,6 +44,23 @@ async def debug_auth(http_request: Request):
         }
 
 
+@router.get("/debug/env")
+async def debug_env():
+    """
+    调试环境变量配置
+    """
+    from app.core.config import settings
+    
+    return {
+        "supabase_url": settings.supabase_url[:20] + "..." if settings.supabase_url else None,
+        "supabase_key": settings.supabase_key[:10] + "..." if settings.supabase_key else None,
+        "supabase_service_role_key": "SET" if settings.supabase_service_role_key else "NOT_SET",
+        "ark_api_key": "SET" if settings.ark_api_key else "NOT_SET",
+        "secret_key": "SET" if settings.secret_key else "NOT_SET",
+        "message": "环境变量检查完成"
+    }
+
+
 @router.post("/generate/stream")
 async def generate_images_stream(
     request: ImageGenerationRequest,
