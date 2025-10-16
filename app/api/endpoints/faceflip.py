@@ -88,7 +88,8 @@ async def generate_images_stream(
             # 调用图像生成服务
             async for event in image_generation_service.generate_images_stream(
                 urls=request.urls,
-                task_id=request.task_id
+                task_id=request.task_id,
+                user_id=user_id
             ):
                 # 格式化SSE事件
                 event_data = f"event: {event.event}\n"

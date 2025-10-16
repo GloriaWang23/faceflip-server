@@ -49,13 +49,14 @@ class ImageGenerationService:
             self._supabase_client = create_client(supabase_url, supabase_key)
         return self._supabase_client
     
-    async def _upload_base64_to_supabase(self, base64_data: str, filename: str) -> str:
+    async def _upload_base64_to_supabase(self, base64_data: str, filename: str, user_id: str) -> str:
         """
         将base64图片上传到Supabase存储
         
         Args:
             base64_data: base64编码的图片数据
             filename: 文件名
+            user_id: 用户ID
             
         Returns:
             str: Supabase存储的公开URL
@@ -64,9 +65,9 @@ class ImageGenerationService:
             # 解码base64数据
             image_data = base64.b64decode(base64_data)
             
-            # 生成存储路径：/utc日期/uuid.png
-            utc_date = datetime.utcnow().strftime("%Y-%m-%d")
-            file_path = f"{utc_date}/{filename}"
+            # 生成存储路径：/userId/utc_date/uuid.png
+            utc_date = datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+            file_path = f"{user_id}/{utc_date}/{filename}"
             
             # 上传到Supabase存储
             bucket_name = settings.supabase_storage_bucket
@@ -95,6 +96,7 @@ class ImageGenerationService:
         self, 
         urls: List[str], 
         task_id: str,
+        user_id: str,
         prompt: Optional[str] = None
     ) -> AsyncGenerator[SSEEvent, None]:
         """
@@ -103,6 +105,7 @@ class ImageGenerationService:
         Args:
             urls: 输入图片URL列表
             task_id: 任务ID
+            user_id: 用户ID
             prompt: 生成提示词，如果为None则使用环境变量配置的默认值
             
         Yields:
@@ -150,7 +153,8 @@ class ImageGenerationService:
                     # 上传base64图片到Supabase
                     supabase_url = await self._upload_base64_to_supabase(
                         image.b64_json, 
-                        filename
+                        filename,
+                        user_id
                     )
                     
                     generated_images.append(GeneratedImage(
