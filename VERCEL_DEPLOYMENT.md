@@ -1,5 +1,13 @@
 # Vercel 部署指南
 
+## 关键变更说明
+
+为了在 Vercel 的 serverless 环境中成功部署，我们做了以下关键调整：
+
+1. **移除 lifespan 事件**：在 `api/index.py` 中创建了不使用 lifespan 的 FastAPI 实例
+2. **独立的入口点**：`api/index.py` 包含完整的应用配置，独立于 `app/main.py`
+3. **Python 3.12**：配置为使用 Python 3.12（Vercel 目前支持的最高版本）
+
 ## 部署步骤
 
 ### 1. 推送代码到 GitHub
@@ -8,7 +16,7 @@
 
 ```bash
 git add .
-git commit -m "配置 Vercel 部署"
+git commit -m "配置 Vercel 部署 - 移除 lifespan"
 git push origin master
 ```
 
