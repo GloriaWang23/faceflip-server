@@ -36,6 +36,9 @@ PUBLIC_PATHS: Set[str] = {
     "/api/health",
     "/api/health/check",
     "/api/health/ping",
+    
+    # 调试接口（临时）
+    "/api/faceflip/debug/auth",
 }
 
 # 白名单路径模式（正则表达式）

@@ -13,6 +13,37 @@ from app.middleware.auth import get_current_user_from_request
 router = APIRouter()
 
 
+@router.get("/debug/auth")
+async def debug_auth(http_request: Request):
+    """
+    调试认证状态接口
+    """
+    try:
+        # 检查认证中间件是否设置了用户信息
+        current_user = get_current_user_from_request(http_request)
+        
+        if current_user:
+            return {
+                "authenticated": True,
+                "user": current_user,
+                "message": "认证成功"
+            }
+        else:
+            # 检查Authorization header
+            auth_header = http_request.headers.get("Authorization")
+            return {
+                "authenticated": False,
+                "auth_header": auth_header,
+                "message": "未认证或认证失败"
+            }
+    except Exception as e:
+        return {
+            "authenticated": False,
+            "error": str(e),
+            "message": "认证检查出错"
+        }
+
+
 @router.post("/generate/stream")
 async def generate_images_stream(
     request: ImageGenerationRequest,

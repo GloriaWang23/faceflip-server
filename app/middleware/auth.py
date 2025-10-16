@@ -47,9 +47,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
     def _get_supabase_client(self) -> Client:
         """获取 Supabase 客户端（懒加载）"""
         if not self.supabase_client:
-            if not settings.supabase_url or not settings.supabase_service_role_key:
-                logger.error("❌ Supabase configuration missing - URL or service role key not set")
-                raise Exception("Supabase configuration missing")
+            if not settings.supabase_url:
+                logger.error("❌ SUPABASE_URL not set")
+                raise Exception("SUPABASE_URL environment variable not set")
+            if not settings.supabase_service_role_key:
+                logger.error("❌ SUPABASE_SERVICE_ROLE_KEY not set")
+                raise Exception("SUPABASE_SERVICE_ROLE_KEY environment variable not set")
             try:
                 self.supabase_client = create_client(
                     settings.supabase_url, 
