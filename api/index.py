@@ -2,6 +2,7 @@
 
 import sys
 import os
+import logging
 
 # Add the parent directory to the path so we can import app
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -12,14 +13,24 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 
 from app.core.config import settings
+from app.core.logging_config import setup_logging
 from app.core.response import success
 from app.api.routes import api_router
+from app.middleware.auth import AuthMiddleware
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.error_handler import (
     error_handler_middleware,
     validation_exception_handler,
     http_exception_handler
 )
+
+# 初始化日志系统（Vercel 环境）
+setup_logging(
+    log_level="INFO",  # Vercel 环境使用 INFO 级别
+    enable_file_logging=False  # Vercel 不需要文件日志，使用 CloudWatch
+)
+
+logger = logging.getLogger(__name__)
 
 # Create FastAPI application without lifespan for serverless
 app = FastAPI(
@@ -40,8 +51,13 @@ app.add_middleware(
 )
 
 # Custom middlewares
+# 注意：中间件的添加顺序很重要，执行顺序是反向的（后添加的先执行）
+# 执行顺序：Logging -> Auth -> Error Handler
 app.add_middleware(LoggingMiddleware)
+app.add_middleware(AuthMiddleware, enable=True)  # 启用全局认证
 app.middleware("http")(error_handler_middleware)
+
+logger.info("🚀 Vercel serverless function initialized")
 
 # Exception handlers
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
