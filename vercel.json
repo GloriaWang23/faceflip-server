@@ -12,7 +12,7 @@
       "src": "ui/package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "dist"
+        "distDir": "ui/dist"
       }
     }
   ],
@@ -22,15 +22,25 @@
       "dest": "api/index.py"
     },
     {
-      "handle": "filesystem"
+      "src": "/assets/(.*)",
+      "dest": "ui/dist/assets/$1"
+    },
+    {
+      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot))",
+      "dest": "ui/dist/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/ui/index.html"
+      "dest": "ui/dist/index.html"
     }
   ],
   "env": {
     "PYTHON_VERSION": "3.12"
+  },
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 60
+    }
   }
 }
 
