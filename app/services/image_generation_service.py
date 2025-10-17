@@ -4,7 +4,7 @@ import os
 import asyncio
 import base64
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, AsyncGenerator, Optional
 from volcenginesdkarkruntime import Ark
 from volcenginesdkarkruntime.types.images.images import SequentialImageGenerationOptions
@@ -66,7 +66,7 @@ class ImageGenerationService:
             image_data = base64.b64decode(base64_data)
             
             # 生成存储路径：/userId/utc_date/uuid.png
-            utc_date = datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+            utc_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             file_path = f"{user_id}/{utc_date}/{filename}"
             
             # 上传到Supabase存储
