@@ -154,6 +154,7 @@ import { ref, computed, onUnmounted } from 'vue'
 import { uploadImage as uploadToSupabase } from '../supabase.js'
 import { useAuth } from '../composables/useAuth.js'
 import { v4 as uuidv4 } from 'uuid'
+import { fetchEventSource } from '@microsoft/fetch-event-source'
 
 // 使用认证状态
 const { user, isAuthenticated, getAccessToken } = useAuth()
@@ -170,7 +171,7 @@ const generating = ref(false)
 const generationStatus = ref(null)
 const generatedImages = ref([])
 const imageLoading = ref({}) // 跟踪每张图像的加载状态
-const currentEventSource = ref(null) // 跟踪当前的 EventSource 实例
+const abortController = ref(null) // 用于中断 fetchEventSource 连接
 const sseTimeout = ref(60000) // SSE超时时间（60秒，毫秒，Vercel限制）
 
 // 触发文件选择
@@ -281,12 +282,11 @@ const clearFile = () => {
   generatedImages.value = []
   imageLoading.value = {}
   
-  // 关闭 EventSource 连接
-  if (currentEventSource.value) {
-    currentEventSource.value.close()
-    currentEventSource.value = null
+  // 中断 fetchEventSource 连接
+  if (abortController.value) {
+    abortController.value.abort()
+    abortController.value = null
   }
-  
   
   if (fileInput.value) {
     fileInput.value.value = ''
@@ -318,10 +318,6 @@ const generateImages = async () => {
   imageLoading.value = {}
   
   const taskId = `task_${Date.now()}`
-  const requestData = {
-    urls: [uploadResult.value.publicUrl],
-    task_id: taskId
-  }
   
   try {
     // 获取JWT访问令牌
@@ -332,25 +328,17 @@ const generateImages = async () => {
     
     console.log('使用JWT令牌请求SSE接口:', accessToken.substring(0, 20) + '...')
     
-    // 构建带认证参数的URL
-    const url = new URL('/api/faceflip/generate/stream', window.location.origin)
-    url.searchParams.set('token', accessToken)
-    url.searchParams.set('task_id', taskId)
-    url.searchParams.set('urls', JSON.stringify([uploadResult.value.publicUrl]))
-    
-    // 关闭之前的连接（如果存在）
-    if (currentEventSource.value) {
-      currentEventSource.value.close()
-      currentEventSource.value = null
+    // 中断之前的连接（如果存在）
+    if (abortController.value) {
+      abortController.value.abort()
     }
     
-    // 使用 EventSource API 来处理 SSE（Vercel兼容版本）
-    const eventSource = new EventSource(url.toString())
-    currentEventSource.value = eventSource
+    // 创建新的 AbortController
+    abortController.value = new AbortController()
     
-    // 设置简单的超时检查
+    // 设置超时
     const timeoutId = setTimeout(() => {
-      if (currentEventSource.value) {
+      if (abortController.value) {
         console.warn('SSE连接超时，关闭连接')
         handleGenerationEvent({
           event: 'error',
@@ -359,127 +347,97 @@ const generateImages = async () => {
             error: `连接已超过 ${sseTimeout.value / 1000} 秒，自动断开`
           }
         })
-        currentEventSource.value.close()
-        currentEventSource.value = null
+        abortController.value.abort()
+        abortController.value = null
         generating.value = false
       }
     }, sseTimeout.value)
     
-    // 添加事件监听器
-    eventSource.addEventListener('start', (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        handleGenerationEvent({
-          event: 'start',
-          data: data
-        })
-      } catch (e) {
-        console.error('解析start事件数据失败:', e)
-        handleGenerationEvent({
-          event: 'start',
-          data: { message: '开始生成图像...' }
-        })
-      }
-    })
+    // 使用 fetchEventSource 来处理 SSE
+    const url = `${window.location.origin}/api/faceflip/generate/stream`
     
-    eventSource.addEventListener('process', (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        handleGenerationEvent({
-          event: 'process',
-          data: data
-        })
-      } catch (e) {
-        console.error('解析process事件数据失败:', e)
-        handleGenerationEvent({
-          event: 'process',
-          data: { message: '正在处理中...' }
-        })
-      }
-    })
-    
-    eventSource.addEventListener('done', (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        handleGenerationEvent({
-          event: 'done',
-          data: data
-        })
-      } catch (e) {
-        console.error('解析done事件数据失败:', e)
-        handleGenerationEvent({
-          event: 'error',
-          data: { 
-            message: '数据解析失败',
-            error: e.message
-          }
-        })
-      }
-    })
-    
-    eventSource.addEventListener('error', (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        handleGenerationEvent({
-          event: 'error',
-          data: data
-        })
-      } catch (e) {
-        console.error('解析error事件数据失败:', e)
-        handleGenerationEvent({
-          event: 'error',
-          data: { 
-            message: '生成过程中发生错误',
-            error: e.message
-          }
-        })
-      }
-    })
-    
-    
-    // 监听连接错误
-    eventSource.onerror = (error) => {
-      console.error('SSE连接错误:', error)
-      handleGenerationEvent({
-        event: 'error',
-        data: {
-          message: '连接中断',
-          error: 'SSE连接失败'
+    await fetchEventSource(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({
+        urls: [uploadResult.value.publicUrl],
+        task_id: taskId
+      }),
+      signal: abortController.value.signal,
+      
+      // 连接打开时的回调
+      onopen(response) {
+        if (response.ok) {
+          console.log('SSE连接已建立')
+          return // 继续处理
+        } else if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+          // 客户端错误，不重试
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        } else {
+          // 其他错误，可能会重试
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
-      })
-      eventSource.close()
-      currentEventSource.value = null
-      generating.value = false
-      // 清理定时器
-      clearTimeout(timeoutId)
-    }
-    
-    // 监听连接打开
-    eventSource.onopen = () => {
-      console.log('SSE连接已建立')
-    }
-    
-    // 等待生成完成或错误后关闭连接
-    const checkGenerationComplete = () => {
-      if (!generating.value && currentEventSource.value) {
-        currentEventSource.value.close()
-        currentEventSource.value = null
-        // 清理定时器
+      },
+      
+      // 接收到消息时的回调
+      onmessage(event) {
+        try {
+          const data = JSON.parse(event.data)
+          handleGenerationEvent({
+            event: event.event || 'message',
+            data: data
+          })
+          
+          // 如果收到 done 或 error 事件，关闭连接
+          if (event.event === 'done' || event.event === 'error') {
+            clearTimeout(timeoutId)
+            if (abortController.value) {
+              abortController.value.abort()
+              abortController.value = null
+            }
+          }
+        } catch (e) {
+          console.error('解析SSE消息失败:', e, event)
+        }
+      },
+      
+      // 连接关闭时的回调
+      onclose() {
+        console.log('SSE连接已关闭')
         clearTimeout(timeoutId)
-      } else if (generating.value) {
-        setTimeout(checkGenerationComplete, 1000)
+        generating.value = false
+        abortController.value = null
+      },
+      
+      // 连接错误时的回调
+      onerror(error) {
+        console.error('SSE连接错误:', error)
+        handleGenerationEvent({
+          event: 'error',
+          data: {
+            message: '连接中断',
+            error: error.message || 'SSE连接失败'
+          }
+        })
+        clearTimeout(timeoutId)
+        generating.value = false
+        throw error // 停止重试
       }
-    }
-    
-    // 开始检查生成状态
-    setTimeout(checkGenerationComplete, 1000)
+    })
     
   } catch (error) {
     console.error('图像生成失败:', error)
-    generationStatus.value = {
-      type: 'error',
-      title: '❌ 生成失败',
-      message: error.message || '图像生成过程中发生错误'
+    
+    // 只在非中断错误时显示错误消息
+    if (error.name !== 'AbortError') {
+      generationStatus.value = {
+        type: 'error',
+        title: '❌ 生成失败',
+        message: error.message || '图像生成过程中发生错误'
+      }
     }
     generating.value = false
   }
@@ -511,14 +469,30 @@ const handleGenerationEvent = (eventData) => {
       break
       
     case 'done':
+      // 兼容两种返回格式：
+      // 1. 新格式：generated_images 数组包含 {url, size} 对象
+      // 2. 旧格式：urls 数组直接包含 URL 字符串
+      let images = []
+      
+      if (data.generated_images && data.generated_images.length > 0) {
+        // 使用新格式
+        images = data.generated_images
+      } else if (data.urls && data.urls.length > 0) {
+        // 兼容旧格式或 generated_images 为空时使用 urls
+        images = data.urls.map(url => ({
+          url: url,
+          size: '未知'
+        }))
+      }
+      
       generationStatus.value = {
         type: 'success',
         title: '✅ 生成完成',
-        message: `成功生成了 ${data.generated_images?.length || 0} 张图像`
+        message: `成功生成了 ${images.length} 张图像`
       }
       
       // 确保图像数据正确设置
-      generatedImages.value = data.generated_images || []
+      generatedImages.value = images
       
       // 初始化图像加载状态
       generatedImages.value.forEach((_, index) => {
@@ -601,11 +575,11 @@ const downloadImage = async (url, index) => {
   }
 }
 
-// 组件卸载时清理 EventSource 连接
+// 组件卸载时清理连接
 onUnmounted(() => {
-  if (currentEventSource.value) {
-    currentEventSource.value.close()
-    currentEventSource.value = null
+  if (abortController.value) {
+    abortController.value.abort()
+    abortController.value = null
   }
 })
 </script>

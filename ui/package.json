@@ -9,6 +9,7 @@
     "vercel-build": "vite build"
   },
   "dependencies": {
+    "@microsoft/fetch-event-source": "^2.0.1",
     "@supabase/supabase-js": "^2.75.0",
     "uuid": "^13.0.0",
     "vue": "^3.2.45"
